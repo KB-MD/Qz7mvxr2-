@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taschengeld-Kontobuch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#ECEFE8;
+    --paper-alt:#E2E6DC;
+    --card:#F5F7F1;
+    --ink:#1E2A24;
+    --ink-soft:#5B665D;
+    --ink-faint:#8B958A;
+    --gold:#B9862F;
+    --gold-deep:#8E6A22;
+    --bonus:#3E8A5B;
+    --malus:#A23E2E;
+    --line:rgba(30,42,36,0.14);
+    --shadow:0 1px 2px rgba(30,42,36,0.08),0 6px 18px rgba(30,42,36,0.07);
+    --radius:12px;
+    --font-display:'Fraunces',Georgia,serif;
+    --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --font-mono:'JetBrains Mono','SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px);
+    background-size:100% 42px;
+    background-attachment:local;
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 18px 80px;}
+  header.app-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+    padding:6px 4px 22px;flex-wrap:wrap;}
+  header.app-head h1{font-family:var(--font-display);font-weight:700;font-size:clamp(26px,4vw,34px);
+    margin:0;letter-spacing:-0.01em;}
+  header.app-head .sub{font-size:13px;color:var(--ink-soft);font-style:italic;}
+
+  .layout{display:grid;grid-template-columns:200px 1fr;gap:0;align-items:start;}
+  @media (max-width:720px){.layout{grid-template-columns:1fr;}}
+
+  /* Passbook index tabs */
+  .tabs{display:flex;flex-direction:column;gap:10px;padding-top:8px;position:relative;z-index:2;}
+  @media (max-width:720px){.tabs{flex-direction:row;overflow-x:auto;padding-bottom:4px;gap:8px;}}
+  .tab{
+    --kid:#333;
+    border:none;cursor:pointer;text-align:left;font-family:var(--font-body);
+    background:var(--paper-alt);color:var(--ink-soft);
+    padding:12px 14px;border-radius:10px 3px 3px 10px;
+    border-left:7px solid var(--kid);
+    font-size:14.5px;font-weight:600;
+    box-shadow:var(--shadow);
+    transition:transform .18s ease, background .18s ease, margin .18s ease;
+    white-space:nowrap;
+  }
+  .tab .amt{display:block;font-family:var(--font-mono);font-size:12px;font-weight:400;
+    color:var(--ink-faint);margin-top:3px;letter-spacing:.02em;}
+  .tab:hover{transform:translateX(2px);}
+  .tab.active{
+    background:var(--card);color:var(--ink);
+    transform:translateX(6px);
+    margin-right:-7px;
+    box-shadow:0 2px 4px rgba(30,42,36,0.1),0 8px 20px rgba(30,42,36,0.1);
+  }
+  .tab.active .amt{color:var(--kid);font-weight:600;}
+  @media (max-width:720px){
+    .tab.active{transform:translateY(2px);margin-right:0;}
+  }
+
+  .panel{background:var(--card);border-radius:3px 14px 14px 14px;box-shadow:var(--shadow);
+    padding:26px 26px 22px;position:relative;z-index:1;min-height:420px;}
+  @media (max-width:720px){.panel{padding:20px 16px;border-radius:14px;margin-top:10px;}}
+
+  .kid-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;
+    flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:20px;}
+  .kid-name{font-family:var(--font-display);font-size:26px;font-weight:700;margin:0;
+    color:var(--kid-color);}
+  .balance{text-align:right;}
+  .balance .label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-faint);}
+  .balance .val{font-family:var(--font-mono);font-size:30px;font-weight:600;line-height:1.1;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px;}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr;}}
+
+  .box{border:1px solid var(--line);border-radius:var(--radius);padding:16px 16px 14px;background:#fff;}
+  .box h3{margin:0 0 10px;font-family:var(--font-display);font-size:15px;font-weight:600;
+    display:flex;align-items:center;gap:6px;}
+  .box .eyebrow{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-faint);
+    margin:0 0 4px;}
+
+  label{font-size:12.5px;color:var(--ink-soft);display:block;margin-bottom:4px;}
+  input[type=number], input[type=date], input[type=text], textarea{
+    font-family:var(--font-mono);font-size:14px;padding:8px 10px;border:1px solid var(--line);
+    border-radius:7px;background:var(--paper);color:var(--ink);width:100%;
+  }
+  textarea{font-family:var(--font-body);resize:vertical;min-height:44px;}
+  input:focus, textarea:focus, button:focus-visible, .toggle:focus-visible{
+    outline:2px solid var(--gold);outline-offset:1px;
+  }
+
+  .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+  .row > div{flex:1;min-width:110px;}
+
+  button{font-family:var(--font-body);font-weight:600;font-size:13.5px;cursor:pointer;
+    border:none;border-radius:8px;padding:9px 14px;min-height:38px;}
+  .btn-primary{background:var(--ink);color:var(--paper);}
+  .btn-primary:hover{background:#0f1712;}
+  .btn-gold{background:var(--gold);color:#fff;}
+  .btn-gold:hover{background:var(--gold-deep);}
+  .btn-ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line);}
+  .btn-ghost:hover{background:var(--paper);}
+  .btn-danger-ghost{background:transparent;color:var(--malus);border:1px solid transparent;
+    padding:4px 6px;min-height:auto;font-size:16px;line-height:1;}
+  .btn-danger-ghost:hover{background:rgba(162,62,46,0.08);}
+  .pencil{background:transparent;border:none;color:var(--ink-faint);cursor:pointer;font-size:14px;
+    padding:2px 4px;}
+  .pencil:hover{color:var(--ink);}
+
+  /* Frequency slider */
+  .freq-toggle{display:flex;align-items:center;gap:10px;margin-top:4px;}
+  .switch{position:relative;width:64px;height:30px;background:var(--paper-alt);border-radius:20px;
+    border:1px solid var(--line);cursor:pointer;flex-shrink:0;}
+  .switch .knob{position:absolute;top:2px;left:2px;width:24px;height:24px;border-radius:50%;
+    background:var(--gold);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s ease, background .2s ease;}
+  .switch.monthly .knob{left:36px;background:var(--ink);}
+  .freq-labels{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);
+    width:64px;margin-top:3px;}
+  .freq-labels span.active{color:var(--ink);font-weight:700;}
+
+  /* Due card */
+  .due-card{border:1px solid var(--line);border-radius:var(--radius);padding:16px;background:#fff;
+    margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:14px;
+    flex-wrap:wrap;}
+  .due-card.is-due{background:#FBF2DD;border-color:var(--gold);}
+  .due-card .info .eyebrow{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-faint);}
+  .due-card .info .amt{font-family:var(--font-mono);font-size:22px;font-weight:600;}
+  .due-card .info .date{font-size:12.5px;color:var(--ink-soft);}
+  .confirm-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
+  .confirm-row div{display:flex;flex-direction:column;gap:2px;}
+  .confirm-row input{width:130px;}
+
+  /* Malus/Bonus */
+  .segmented{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content;}
+  .segmented button{border-radius:0;background:#fff;color:var(--ink-soft);border-right:1px solid var(--line);}
+  .segmented button:last-child{border-right:none;}
+  .segmented button.sel[data-type=bonus]{background:var(--bonus);color:#fff;}
+  .segmented button.sel[data-type=malus]{background:var(--malus);color:#fff;}
+
+  /* History */
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--ink-faint);border-bottom:1px solid var(--line);padding:6px 8px;font-weight:600;}
+  tbody td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  .type-tag{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600;white-space:nowrap;}
+  .type-tag.payout{background:var(--paper-alt);color:var(--ink-soft);}
+  .type-tag.bonus{background:rgba(62,138,91,0.14);color:var(--bonus);}
+  .type-tag.malus{background:rgba(162,62,46,0.14);color:var(--malus);}
+  .amount-cell{font-family:var(--font-mono);font-weight:600;white-space:nowrap;}
+  .amount-cell.pos{color:var(--bonus);}
+  .amount-cell.neg{color:var(--malus);}
+  .comment-cell{color:var(--ink-soft);}
+  .empty-hist{color:var(--ink-faint);font-size:13px;font-style:italic;padding:14px 4px;}
+
+  /* Calendar view */
+  .cal-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .cal-nav .label{font-family:var(--font-display);font-weight:600;font-size:15px;text-transform:capitalize;}
+  .cal-nav button{padding:4px 10px;min-height:30px;}
+  .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;}
+  .cal-weekdays span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);
+    text-align:center;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .cal-cell{min-height:52px;border:1px solid var(--line);border-radius:7px;padding:4px;background:var(--paper);
+    cursor:pointer;display:flex;flex-direction:column;gap:3px;position:relative;}
+  .cal-cell:hover{background:var(--paper-alt);}
+  .cal-cell.empty{visibility:hidden;pointer-events:none;}
+  .cal-cell .daynum{font-size:11px;color:var(--ink-soft);font-family:var(--font-mono);}
+  .cal-cell.today .daynum{color:var(--ink);font-weight:700;}
+  .cal-cell.today{border-color:var(--ink);}
+  .cal-cell.due{box-shadow:inset 0 0 0 2px var(--gold);}
+  .cal-cell.selected{background:var(--card);border-color:var(--kid-color);box-shadow:0 0 0 1px var(--kid-color);}
+  .cal-dots{display:flex;gap:3px;flex-wrap:wrap;}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block;}
+  .dot.payout{background:var(--ink-faint);}
+  .dot.bonus{background:var(--bonus);}
+  .dot.malus{background:var(--malus);}
+  .cal-day-detail{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;}
+  .cal-day-detail h4{margin:0 0 8px;font-family:var(--font-display);font-size:14px;font-weight:600;}
+  .cal-legend{display:flex;gap:14px;margin-top:10px;font-size:11.5px;color:var(--ink-soft);flex-wrap:wrap;}
+  .cal-legend span{display:flex;align-items:center;gap:5px;}
+
+  /* Stamp animation */
+  .stamp-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    pointer-events:none;z-index:50;}
+  .stamp{
+    font-family:var(--font-display);font-weight:700;font-size:22px;color:var(--gold-deep);
+    border:4px double var(--gold-deep);border-radius:10px;padding:14px 26px;
+    background:rgba(251,242,221,0.92);letter-spacing:.03em;
+    transform:scale(2.2) rotate(-26deg);opacity:0;
+    animation:stampIn .55s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes stampIn{
+    0%{transform:scale(2.2) rotate(-26deg);opacity:0;}
+    55%{transform:scale(0.92) rotate(-9deg);opacity:1;}
+    75%{transform:scale(1.04) rotate(-7deg);}
+    100%{transform:scale(1) rotate(-8deg);opacity:1;}
+  }
+  .stamp.fade{animation:stampOut .4s ease forwards;}
+  @keyframes stampOut{to{opacity:0;transform:scale(1) rotate(-8deg) translateY(-8px);}}
+
+  footer.app-foot{margin-top:26px;display:flex;justify-content:space-between;align-items:center;
+    flex-wrap:wrap;gap:8px;font-size:12px;color:var(--ink-faint);padding:0 4px;}
+  footer.app-foot .actions{display:flex;gap:14px;}
+  footer.app-foot button.link{background:none;border:none;color:var(--ink-soft);text-decoration:underline;
+    padding:0;min-height:auto;font-size:12px;font-weight:500;cursor:pointer;}
+
+  /* Sync */
+  .sync-area{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .sync-status{font-size:11.5px;color:var(--ink-faint);display:flex;align-items:center;gap:5px;}
+  .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--ink-faint);display:inline-block;flex-shrink:0;}
+  .sync-dot.ok{background:var(--bonus);}
+  .sync-dot.err{background:var(--malus);}
+  .sync-dot.pending{background:var(--gold);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(30,42,36,0.45);display:none;
+    align-items:center;justify-content:center;z-index:60;padding:16px;}
+  .modal{background:var(--card);border-radius:14px;padding:22px;max-width:380px;width:100%;
+    box-shadow:var(--shadow);}
+  .modal h3{font-family:var(--font-display);margin:0 0 8px;font-size:19px;}
+  .modal .modal-hint{font-size:12.5px;color:var(--ink-soft);line-height:1.5;margin:0 0 14px;}
+  .modal label{margin-top:10px;}
+  .modal-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+
+  @media (prefers-reduced-motion: reduce){
+    .stamp{animation:none;opacity:1;transform:scale(1) rotate(-8deg);}
+    .tab, .tab.active{transition:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app-head">
+    <div>
+      <h1>Taschengeld-Kontobuch</h1>
+      <div class="sub">Maximilian · Julian · Felix</div>
+    </div>
+    <div class="sync-area">
+      <div class="sync-status" id="syncStatus"></div>
+      <button class="btn-ghost" id="btnSync" type="button">⇅ Sync einrichten</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="tabs" id="tabs"></nav>
+    <div class="panel" id="panel"></div>
+  </div>
+
+  <footer class="app-foot">
+    <span>Alle Daten werden lokal in diesem Browser gespeichert.</span>
+    <span class="actions">
+      <button class="link" id="btnExport">Daten sichern (Export)</button>
+      <button class="link" id="btnImport">Daten laden (Import)</button>
+      <input type="file" id="fileImport" accept="application/json" style="display:none;">
+    </span>
+  </footer>
+</div>
+
+<div class="stamp-overlay" id="stampOverlay" style="display:none;">
+  <div class="stamp" id="stampEl">✓ AUSGEZAHLT</div>
+</div>
+
+<div class="modal-overlay" id="syncModalOverlay">
+  <div class="modal">
+    <h3>Geräte-Synchronisierung</h3>
+    <p class="modal-hint">Damit ihr beide denselben Datenstand seht, hinterlegt hier einmalig die Zugangsdaten
+      zu eurem kostenlosen Online-Speicher (jsonbin.io). Danach läuft der Abgleich automatisch im Hintergrund.</p>
+    <label>Bin-ID</label>
+    <input type="text" id="syncBinId" placeholder="z. B. 66f1a2b9c...">
+    <label>Master-Key</label>
+    <input type="text" id="syncApiKey" placeholder="$2a$10$...">
+    <div class="modal-actions">
+      <button class="btn-primary" id="syncSaveBtn">Verbinden &amp; speichern</button>
+      <button class="btn-ghost" id="syncCancelBtn">Abbrechen</button>
+      <button class="btn-danger-ghost" id="syncDisconnectBtn" style="margin-left:auto;">Trennen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'taschengeld_kontobuch_v1';
+
+const DEFAULT_STATE = {
+  activeKid: 'maximilian',
+  kids: [
+    { id:'maximilian', name:'Maximilian', color:'#2F6F62', base:20, frequency:'monthly', nextDue: todayISO(), entries: [] },
+    { id:'julian',     name:'Julian',     color:'#3E4C8A', base:10, frequency:'weekly',  nextDue: todayISO(), entries: [] },
+    { id:'felix',      name:'Felix',      color:'#7A3B5E', base:10, frequency:'weekly',  nextDue: todayISO(), entries: [] },
+  ]
+};
+
+// ---------- date helpers ----------
+function todayISO(){ return toISO(new Date()); }
+function toISO(d){ return d.toISOString().slice(0,10); }
+function parseISO(s){ return new Date(s+'T00:00:00'); }
+function addDays(iso, n){ const d=parseISO(iso); d.setDate(d.getDate()+n); return toISO(d); }
+function addMonths(iso, n){ const d=parseISO(iso); d.setMonth(d.getMonth()+n); return toISO(d); }
+function addPeriod(iso, freq){ return freq==='weekly' ? addDays(iso,7) : addMonths(iso,1); }
+function formatDate(iso){
+  return parseISO(iso).toLocaleDateString('de-AT', {day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function formatMoney(n){
+  return new Intl.NumberFormat('de-AT', {style:'currency', currency:'EUR'}).format(n);
+}
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+// ---------- state ----------
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return structuredClone(DEFAULT_STATE);
+    const parsed = JSON.parse(raw);
+    if(!parsed.kids || !parsed.kids.length) return structuredClone(DEFAULT_STATE);
+    return parsed;
+  }catch(e){
+    console.error('Konnte gespeicherte Daten nicht lesen, starte mit Standardwerten.', e);
+    return structuredClone(DEFAULT_STATE);
+  }
+}
+function saveState(){
+  state.updatedAt = Date.now();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if(!applyingRemote) scheduleSync();
+}
+
+let state = loadState();
+
+// ---------- cloud sync (jsonbin.io) ----------
+const SYNC_KEY = 'taschengeld_sync_config_v1';
+let applyingRemote = false;
+let pushTimer = null;
+
+function loadSyncConfig(){
+  try{ const raw = localStorage.getItem(SYNC_KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function saveSyncConfig(cfg){ localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); }
+function clearSyncConfig(){ localStorage.removeItem(SYNC_KEY); }
+let syncConfig = loadSyncConfig();
+
+function nowTime(){ return new Date().toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'}); }
+
+function setSyncStatus(kind, text){
+  const dot = document.getElementById('syncDot');
+  const label = document.getElementById('syncLabel');
+  if(!dot || !label) return;
+  dot.className = 'sync-dot' + (kind ? ' '+kind : '');
+  label.textContent = text;
+}
+
+function renderSyncStatus(){
+  const el = document.getElementById('syncStatus');
+  if(!el) return;
+  if(!syncConfig){
+    el.innerHTML = `<span class="sync-dot"></span><span id="syncLabel">Nicht verbunden</span>`;
+  }else{
+    el.innerHTML = `<span class="sync-dot" id="syncDot"></span><span id="syncLabel">Verbunden</span>`;
+  }
+}
+
+function scheduleSync(){
+  if(!syncConfig) return;
+  if(pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushToCloud, 900);
+}
+
+async function pushToCloud(){
+  if(!syncConfig) return;
+  setSyncStatus('pending','Synchronisiere …');
+  try{
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${syncConfig.binId}`, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Master-Key':syncConfig.apiKey},
+      body: JSON.stringify(state)
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    setSyncStatus('ok', 'Synchronisiert um ' + nowTime());
+  }catch(e){
+    setSyncStatus('err', 'Sync fehlgeschlagen – wird erneut versucht');
+    console.error('Sync-Push fehlgeschlagen:', e);
+  }
+}
+
+async function pullFromCloud(silent){
+  if(!syncConfig) return;
+  try{
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${syncConfig.binId}/latest?meta=false`, {
+      headers:{'X-Master-Key':syncConfig.apiKey}
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const remote = await res.json();
+    if(remote && remote.kids && (remote.updatedAt||0) > (state.updatedAt||0)){
+      applyingRemote = true;
+      state = remote;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      applyingRemote = false;
+      render();
+    }
+    if(!silent) setSyncStatus('ok', 'Synchronisiert um ' + nowTime());
+  }catch(e){
+    if(!silent) setSyncStatus('err', 'Verbindung fehlgeschlagen');
+    console.error('Sync-Pull fehlgeschlagen:', e);
+  }
+}
+
+function wireSyncUI(){
+  document.getElementById('btnSync').addEventListener('click', ()=>{
+    document.getElementById('syncBinId').value = syncConfig ? syncConfig.binId : '';
+    document.getElementById('syncApiKey').value = syncConfig ? syncConfig.apiKey : '';
+    document.getElementById('syncModalOverlay').style.display = 'flex';
+  });
+  document.getElementById('syncCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('syncModalOverlay').style.display = 'none';
+  });
+  document.getElementById('syncDisconnectBtn').addEventListener('click', ()=>{
+    clearSyncConfig();
+    syncConfig = null;
+    renderSyncStatus();
+    document.getElementById('syncModalOverlay').style.display = 'none';
+  });
+  document.getElementById('syncSaveBtn').addEventListener('click', async ()=>{
+    const binId = document.getElementById('syncBinId').value.trim();
+    const apiKey = document.getElementById('syncApiKey').value.trim();
+    if(!binId || !apiKey){ alert('Bitte Bin-ID und Master-Key eingeben.'); return; }
+    syncConfig = { binId, apiKey };
+    saveSyncConfig(syncConfig);
+    document.getElementById('syncModalOverlay').style.display = 'none';
+    renderSyncStatus();
+    setSyncStatus('pending','Verbinde …');
+    try{
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest?meta=false`, {
+        headers:{'X-Master-Key':apiKey}
+      });
+      if(res.ok){
+        const remote = await res.json();
+        if(remote && remote.kids){
+          applyingRemote = true;
+          state = remote;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          applyingRemote = false;
+          render();
+          setSyncStatus('ok', 'Synchronisiert um ' + nowTime());
+          return;
+        }
+      }
+      throw new Error('Bin leer oder ungültig');
+    }catch(e){
+      await pushToCloud();
+    }
+  });
+}
+
+function getKid(id){ return state.kids.find(k=>k.id===id); }
+function balanceOf(kid){
+  return kid.entries.reduce((sum,e)=>{
+    if(e.type==='malus') return sum - e.amount;
+    return sum + e.amount;
+  },0);
+}
+
+// ---------- render: tabs ----------
+function renderTabs(){
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  state.kids.forEach(kid=>{
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (kid.id===state.activeKid ? ' active' : '');
+    btn.style.setProperty('--kid', kid.color);
+    btn.innerHTML = `${kid.name}<span class="amt">${formatMoney(balanceOf(kid))}</span>`;
+    btn.addEventListener('click', ()=>{ state.activeKid = kid.id; saveState(); render(); });
+    tabs.appendChild(btn);
+  });
+}
+
+// ---------- render: panel ----------
+function renderPanel(){
+  const kid = getKid(state.activeKid);
+  const panel = document.getElementById('panel');
+  const bal = balanceOf(kid);
+  const isDue = kid.nextDue <= todayISO();
+  const defaultAdjust = Math.round(kid.base * 0.10 * 100) / 100;
+
+  panel.style.setProperty('--kid-color', kid.color);
+  panel.innerHTML = `
+    <div class="kid-head">
+      <h2 class="kid-name">${kid.name}</h2>
+      <div class="balance">
+        <div class="label">Kontostand</div>
+        <div class="val">${formatMoney(bal)}</div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="box">
+        <p class="eyebrow">Basis-Taschengeld</p>
+        <h3>Betrag <button class="pencil" id="editBase" title="Bearbeiten">✎ ändern</button></h3>
+        <div id="baseDisplay" style="font-family:var(--font-mono);font-size:20px;font-weight:600;">
+          ${formatMoney(kid.base)}
+        </div>
+        <div id="baseEditRow" class="row" style="display:none;margin-top:8px;">
+          <div>
+            <label>Neuer Betrag (€)</label>
+            <input type="number" step="0.5" min="0" id="baseInput" value="${kid.base}">
+          </div>
+          <button class="btn-primary" id="saveBase">Speichern</button>
+          <button class="btn-ghost" id="cancelBase">Abbrechen</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <p class="eyebrow">Auszahlungs-Rhythmus</p>
+        <h3>Turnus</h3>
+        <div class="freq-toggle">
+          <div>
+            <div class="switch ${kid.frequency==='monthly' ? 'monthly' : ''}" id="freqSwitch" role="switch"
+                 aria-checked="${kid.frequency==='monthly'}" tabindex="0"><div class="knob"></div></div>
+            <div class="freq-labels">
+              <span class="${kid.frequency==='weekly' ? 'active':''}">Woche</span>
+              <span class="${kid.frequency==='monthly' ? 'active':''}">Monat</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="due-card ${isDue ? 'is-due':''}" id="dueCard">
+      <div class="info">
+        <div class="eyebrow">${isDue ? 'Jetzt fällig' : 'Nächste Fälligkeit'}</div>
+        <div class="amt">${formatMoney(kid.base)}</div>
+        <div class="date">fällig am ${formatDate(kid.nextDue)}</div>
+      </div>
+      <div id="dueAction">
+        <button class="btn-gold" id="btnPayout">Ausgezahlt ✓</button>
+      </div>
+    </div>
+
+    <div class="box" style="margin-bottom:20px;">
+      <p class="eyebrow">Bonus / Malus</p>
+      <h3>Neuen Eintrag hinzufügen</h3>
+      <div class="segmented" id="typeSeg">
+        <button data-type="bonus" class="sel" type="button">Bonus</button>
+        <button data-type="malus" type="button">Malus</button>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Betrag (€)</label>
+          <input type="number" step="0.5" min="0" id="adjAmount" value="${defaultAdjust}">
+        </div>
+        <div style="flex:2;min-width:200px;">
+          <label>Kommentar</label>
+          <input type="text" id="adjComment" placeholder="z. B. Zimmer nicht aufgeräumt">
+        </div>
+        <button class="btn-primary" id="btnAddAdj">Eintragen</button>
+      </div>
+    </div>
+
+    ${renderHistoryBox(kid)}
+  `;
+
+  wirePanelEvents(kid, defaultAdjust);
+}
+
+// runtime-only view state (not persisted — only ledger data is saved)
+const historyView = {};
+const calendarCursor = {};
+const selectedDay = {};
+
+function renderHistoryBox(kid){
+  const view = historyView[kid.id] || 'table';
+  return `<div class="box">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:2px;">
+      <div>
+        <p class="eyebrow">Verlauf</p>
+        <h3 style="margin:0;">Kontobuch</h3>
+      </div>
+      <div class="segmented" id="viewSeg">
+        <button data-view="table" class="${view==='table' ? 'sel':''}" type="button">Tabelle</button>
+        <button data-view="calendar" class="${view==='calendar' ? 'sel':''}" type="button">Kalender</button>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      ${view==='table' ? renderHistoryTable(kid) : renderCalendar(kid)}
+    </div>
+  </div>`;
+}
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+function renderCalendar(kid){
+  const cur = calendarCursor[kid.id] || (()=>{
+    const t = new Date();
+    return { year:t.getFullYear(), month:t.getMonth() };
+  })();
+  calendarCursor[kid.id] = cur;
+
+  const first = new Date(cur.year, cur.month, 1);
+  const startOffset = (first.getDay()+6)%7; // Monday = 0
+  const daysInMonth = new Date(cur.year, cur.month+1, 0).getDate();
+  const monthLabel = first.toLocaleDateString('de-AT', {month:'long', year:'numeric'});
+
+  const byDate = {};
+  kid.entries.forEach(e=>{ (byDate[e.date] = byDate[e.date] || []).push(e); });
+
+  let cells = '';
+  for(let i=0;i<startOffset;i++){ cells += `<div class="cal-cell empty"></div>`; }
+  for(let day=1; day<=daysInMonth; day++){
+    const iso = `${cur.year}-${pad2(cur.month+1)}-${pad2(day)}`;
+    const dayEntries = byDate[iso] || [];
+    const classes = ['cal-cell'];
+    if(iso===todayISO()) classes.push('today');
+    if(iso===kid.nextDue) classes.push('due');
+    if(selectedDay[kid.id]===iso) classes.push('selected');
+    const dots = dayEntries.slice(0,6).map(e=>`<span class="dot ${e.type}"></span>`).join('');
+    cells += `<div class="${classes.join(' ')}" data-date="${iso}">
+      <span class="daynum">${day}</span>
+      <span class="cal-dots">${dots}</span>
+    </div>`;
+  }
+
+  const sel = selectedDay[kid.id];
+  const selEntries = sel ? (byDate[sel] || []) : [];
+  const detail = !sel ? '' : `
+    <div class="cal-day-detail">
+      <h4>${formatDate(sel)}</h4>
+      ${selEntries.length ? selEntries.map(e=>{
+        const label = e.type==='payout' ? 'Auszahlung' : e.type==='bonus' ? 'Bonus' : 'Malus';
+        const sign = e.type==='malus' ? '−' : '+';
+        const cls = e.type==='malus' ? 'neg' : 'pos';
+        return `<div style="display:flex;gap:10px;align-items:center;padding:5px 0;font-size:13.5px;">
+          <span class="type-tag ${e.type}">${label}</span>
+          <span class="amount-cell ${cls}">${sign} ${formatMoney(e.amount)}</span>
+          <span class="comment-cell">${e.comment ? escapeHTML(e.comment) : '—'}</span>
+        </div>`;
+      }).join('') : `<div class="empty-hist">An diesem Tag keine Einträge.</div>`}
+    </div>`;
+
+  return `
+    <div class="cal-nav">
+      <button class="btn-ghost" id="calPrev" type="button">← </button>
+      <span class="label">${monthLabel}</span>
+      <button class="btn-ghost" id="calNext" type="button"> →</button>
+    </div>
+    <div class="cal-weekdays">
+      <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+    </div>
+    <div class="cal-grid">${cells}</div>
+    <div class="cal-legend">
+      <span><span class="dot payout"></span> Auszahlung</span>
+      <span><span class="dot bonus"></span> Bonus</span>
+      <span><span class="dot malus"></span> Malus</span>
+      <span style="box-shadow:inset 0 0 0 2px var(--gold);padding:1px 5px;border-radius:4px;">fällig</span>
+    </div>
+    ${detail}
+  `;
+}
+
+function renderHistoryTable(kid){
+  if(!kid.entries.length){
+    return `<div class="empty-hist">Noch keine Einträge — Auszahlungen, Boni und Mali erscheinen hier.</div>`;
+  }
+  const sorted = [...kid.entries].sort((a,b)=> b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  const rows = sorted.map(e=>{
+    const label = e.type==='payout' ? 'Auszahlung' : e.type==='bonus' ? 'Bonus' : 'Malus';
+    const sign = e.type==='malus' ? '−' : '+';
+    const cls = e.type==='malus' ? 'neg' : 'pos';
+    return `<tr>
+      <td>${formatDate(e.date)}</td>
+      <td><span class="type-tag ${e.type}">${label}</span></td>
+      <td class="amount-cell ${cls}">${sign} ${formatMoney(e.amount)}</td>
+      <td class="comment-cell">${e.comment ? escapeHTML(e.comment) : '—'}</td>
+      <td><button class="btn-danger-ghost" data-del="${e.id}" title="Eintrag löschen">✕</button></td>
+    </tr>`;
+  }).join('');
+  return `<table>
+    <thead><tr><th>Datum</th><th>Art</th><th>Betrag</th><th>Kommentar</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function escapeHTML(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ---------- events ----------
+function wirePanelEvents(kid, defaultAdjust){
+  // base amount edit
+  document.getElementById('editBase').addEventListener('click', ()=>{
+    document.getElementById('baseDisplay').style.display='none';
+    document.getElementById('baseEditRow').style.display='flex';
+  });
+  document.getElementById('cancelBase').addEventListener('click', renderPanel);
+  document.getElementById('saveBase').addEventListener('click', ()=>{
+    const val = parseFloat(document.getElementById('baseInput').value);
+    if(!isNaN(val) && val>=0){
+      kid.base = Math.round(val*100)/100;
+      saveState();
+    }
+    renderPanel();
+    renderTabs();
+  });
+
+  // frequency switch
+  const freqSwitch = document.getElementById('freqSwitch');
+  const toggleFreq = ()=>{
+    kid.frequency = kid.frequency==='weekly' ? 'monthly' : 'weekly';
+    kid.nextDue = addPeriod(todayISO(), kid.frequency);
+    saveState();
+    renderPanel();
+  };
+  freqSwitch.addEventListener('click', toggleFreq);
+  freqSwitch.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleFreq(); } });
+
+  // payout confirm
+  document.getElementById('btnPayout').addEventListener('click', ()=>{
+    const action = document.getElementById('dueAction');
+    action.innerHTML = `
+      <div class="confirm-row">
+        <div>
+          <label>Betrag (€)</label>
+          <input type="number" step="0.5" min="0" id="payoutAmount" value="${kid.base}">
+        </div>
+        <div>
+          <label>Datum</label>
+          <input type="date" id="payoutDate" value="${todayISO()}">
+        </div>
+        <button class="btn-gold" id="confirmPayout">OK</button>
+        <button class="btn-ghost" id="cancelPayout">Abbrechen</button>
+      </div>`;
+    document.getElementById('cancelPayout').addEventListener('click', renderPanel);
+    document.getElementById('confirmPayout').addEventListener('click', ()=>{
+      const amt = parseFloat(document.getElementById('payoutAmount').value);
+      const date = document.getElementById('payoutDate').value || todayISO();
+      if(isNaN(amt) || amt<0) return;
+      kid.entries.push({ id:uid(), type:'payout', amount:Math.round(amt*100)/100, date, comment:'' });
+      kid.nextDue = addPeriod(kid.nextDue, kid.frequency);
+      saveState();
+      playStamp();
+      renderPanel();
+      renderTabs();
+    });
+  });
+
+  // bonus/malus type toggle
+  let selectedType = 'bonus';
+  const segBtns = document.querySelectorAll('#typeSeg button');
+  segBtns.forEach(b=>{
+    b.addEventListener('click', ()=>{
+      selectedType = b.dataset.type;
+      segBtns.forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
+      document.getElementById('adjAmount').value = defaultAdjust;
+    });
+  });
+
+  // add bonus/malus
+  document.getElementById('btnAddAdj').addEventListener('click', ()=>{
+    const amt = parseFloat(document.getElementById('adjAmount').value);
+    const comment = document.getElementById('adjComment').value.trim();
+    if(isNaN(amt) || amt<0) return;
+    kid.entries.push({ id:uid(), type:selectedType, amount:Math.round(amt*100)/100, date: todayISO(), comment });
+    saveState();
+    renderPanel();
+    renderTabs();
+  });
+
+  // history view toggle (table / calendar)
+  const viewSeg = document.getElementById('viewSeg');
+  if(viewSeg){
+    viewSeg.querySelectorAll('button').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        historyView[kid.id] = b.dataset.view;
+        renderPanel();
+      });
+    });
+  }
+
+  // calendar navigation
+  const calPrev = document.getElementById('calPrev');
+  const calNext = document.getElementById('calNext');
+  if(calPrev){
+    calPrev.addEventListener('click', ()=>{
+      const cur = calendarCursor[kid.id];
+      cur.month -= 1;
+      if(cur.month < 0){ cur.month = 11; cur.year -= 1; }
+      renderPanel();
+    });
+  }
+  if(calNext){
+    calNext.addEventListener('click', ()=>{
+      const cur = calendarCursor[kid.id];
+      cur.month += 1;
+      if(cur.month > 11){ cur.month = 0; cur.year += 1; }
+      renderPanel();
+    });
+  }
+  document.querySelectorAll('.cal-cell[data-date]').forEach(cell=>{
+    cell.addEventListener('click', ()=>{
+      const iso = cell.dataset.date;
+      selectedDay[kid.id] = selectedDay[kid.id]===iso ? null : iso;
+      renderPanel();
+    });
+  });
+
+  // delete history entry
+  document.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.del;
+      if(confirm('Diesen Eintrag wirklich löschen?')){
+        kid.entries = kid.entries.filter(e=>e.id!==id);
+        saveState();
+        renderPanel();
+        renderTabs();
+      }
+    });
+  });
+}
+
+function playStamp(){
+  const overlay = document.getElementById('stampOverlay');
+  const stamp = document.getElementById('stampEl');
+  stamp.classList.remove('fade');
+  overlay.style.display = 'flex';
+  void stamp.offsetWidth; // restart animation
+  stamp.style.animation = 'none';
+  void stamp.offsetWidth;
+  stamp.style.animation = '';
+  setTimeout(()=>{
+    stamp.classList.add('fade');
+    setTimeout(()=>{ overlay.style.display='none'; }, 420);
+  }, 750);
+}
+
+// ---------- export / import ----------
+document.getElementById('btnExport').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `taschengeld-backup-${todayISO()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('btnImport').addEventListener('click', ()=>{
+  document.getElementById('fileImport').click();
+});
+document.getElementById('fileImport').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!parsed.kids) throw new Error('Ungültiges Format');
+      state = parsed;
+      saveState();
+      render();
+      alert('Daten erfolgreich geladen.');
+    }catch(err){
+      alert('Diese Datei konnte nicht gelesen werden.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ---------- init ----------
+function render(){ renderTabs(); renderPanel(); }
+render();
+renderSyncStatus();
+wireSyncUI();
+if(syncConfig){
+  pullFromCloud(true);
+  setInterval(()=>pullFromCloud(true), 25000);
+  window.addEventListener('focus', ()=>pullFromCloud(true));
+}
+</script>
+</body>
+</html>
