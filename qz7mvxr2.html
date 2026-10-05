@@ -81,6 +81,11 @@
   .balance{text-align:right;}
   .balance .label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-faint);}
   .balance .val{font-family:var(--font-mono);font-size:30px;font-weight:600;line-height:1.1;}
+  .balance.is-due{background:#FBF2DD;border:1px solid var(--gold);border-radius:var(--radius);padding:12px 14px;}
+  .balance .confirm-row{justify-content:flex-end;}
+  .balance .breakdown{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:4px;}
+  .balance .breakdown .b{color:var(--bonus);}
+  .balance .breakdown .m{color:var(--malus);}
 
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px;}
   @media (max-width:640px){.grid2{grid-template-columns:1fr;}}
@@ -142,12 +147,36 @@
   .confirm-row div{display:flex;flex-direction:column;gap:2px;}
   .confirm-row input{width:130px;}
 
-  /* Malus/Bonus */
+  /* Bonus / Malus tap rows */
+  .adj-comment{margin-bottom:14px;}
+  .adj-block{margin-bottom:12px;}
+  .adj-block:last-child{margin-bottom:0;}
+  .adj-label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;font-weight:700;margin-bottom:6px;
+    display:flex;align-items:center;gap:6px;}
+  .adj-label.bonus{color:var(--bonus);}
+  .adj-label.malus{color:var(--malus);}
+  .tap-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  @media (max-width:560px){.tap-row{grid-template-columns:repeat(4,1fr);}}
+  .tap{font-family:var(--font-mono);font-weight:600;font-size:13.5px;min-height:48px;padding:6px 2px;
+    border-radius:10px;border:1.5px solid;transition:transform .08s ease, background .12s ease, color .12s ease;
+    -webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+  .tap:active{transform:scale(0.94);}
+  .tap.bonus{background:rgba(62,138,91,0.10);color:var(--bonus);border-color:var(--bonus);}
+  .tap.bonus:hover,.tap.bonus:active{background:var(--bonus);color:#fff;}
+  .tap.malus{background:rgba(162,62,46,0.10);color:var(--malus);border-color:var(--malus);}
+  .tap.malus:hover,.tap.malus:active{background:var(--malus);color:#fff;}
+
+  /* Toast */
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:70;
+    background:var(--ink);color:var(--paper);padding:10px 14px;border-radius:10px;font-size:13.5px;
+    display:none;align-items:center;gap:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:92vw;}
+  .toast button{background:transparent;color:#F2D79C;border:none;padding:2px 4px;min-height:auto;
+    font-size:13px;text-decoration:underline;}
+
   .segmented{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content;}
   .segmented button{border-radius:0;background:#fff;color:var(--ink-soft);border-right:1px solid var(--line);}
   .segmented button:last-child{border-right:none;}
-  .segmented button.sel[data-type=bonus]{background:var(--bonus);color:#fff;}
-  .segmented button.sel[data-type=malus]{background:var(--malus);color:#fff;}
+  .segmented button.sel{background:var(--ink);color:var(--paper);}
 
   /* History */
   table{width:100%;border-collapse:collapse;font-size:13.5px;}
@@ -162,7 +191,10 @@
   .amount-cell{font-family:var(--font-mono);font-weight:600;white-space:nowrap;}
   .amount-cell.pos{color:var(--bonus);}
   .amount-cell.neg{color:var(--malus);}
+  .amount-cell.neutral{color:var(--ink);}
   .comment-cell{color:var(--ink-soft);}
+  .open-flag{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-deep);
+    margin-left:6px;font-weight:600;}
   .empty-hist{color:var(--ink-faint);font-size:13px;font-style:italic;padding:14px 4px;}
 
   /* Calendar view */
@@ -271,6 +303,8 @@
   <div class="stamp" id="stampEl">✓ AUSGEZAHLT</div>
 </div>
 
+<div class="toast" id="toast"><span id="toastText"></span><button id="toastUndo" type="button">Rückgängig</button></div>
+
 <div class="modal-overlay" id="syncModalOverlay">
   <div class="modal">
     <h3>Geräte-Synchronisierung</h3>
@@ -294,19 +328,41 @@ const STORAGE_KEY = 'taschengeld_kontobuch_v1';
 const DEFAULT_STATE = {
   activeKid: 'maximilian',
   kids: [
-    { id:'maximilian', name:'Maximilian', color:'#2F6F62', base:20, frequency:'monthly', nextDue: todayISO(), entries: [] },
-    { id:'julian',     name:'Julian',     color:'#3E4C8A', base:10, frequency:'weekly',  nextDue: todayISO(), entries: [] },
-    { id:'felix',      name:'Felix',      color:'#7A3B5E', base:10, frequency:'weekly',  nextDue: todayISO(), entries: [] },
+    { id:'maximilian', name:'Maximilian', color:'#2F6F62', base:20, frequency:'monthly', nextDue: dueOnOrAfter(todayISO(),'monthly'), entries: [] },
+    { id:'julian',     name:'Julian',     color:'#3E4C8A', base:10, frequency:'weekly',  nextDue: dueOnOrAfter(todayISO(),'weekly'), entries: [] },
+    { id:'felix',      name:'Felix',      color:'#7A3B5E', base:10, frequency:'weekly',  nextDue: dueOnOrAfter(todayISO(),'weekly'), entries: [] },
   ]
 };
 
+// Tap-Beträge für Bonus / Malus
+const TAP_AMOUNTS = [
+  { v:0.10, l:'10 Ct' },
+  { v:0.25, l:'25 Ct' },
+  { v:0.50, l:'50 Ct' },
+  { v:1,    l:'1 €'   },
+  { v:2,    l:'2 €'   },
+  { v:5,    l:'5 €'   },
+  { v:10,   l:'10 €'  },
+];
+
 // ---------- date helpers ----------
 function todayISO(){ return toISO(new Date()); }
-function toISO(d){ return d.toISOString().slice(0,10); }
+function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function parseISO(s){ return new Date(s+'T00:00:00'); }
 function addDays(iso, n){ const d=parseISO(iso); d.setDate(d.getDate()+n); return toISO(d); }
 function addMonths(iso, n){ const d=parseISO(iso); d.setMonth(d.getMonth()+n); return toISO(d); }
-function addPeriod(iso, freq){ return freq==='weekly' ? addDays(iso,7) : addMonths(iso,1); }
+// Fälligkeit: wöchentlich immer Freitag, monatlich immer der 1. des Monats
+function dueOnOrAfter(iso, freq){
+  const d = parseISO(iso);
+  if(freq==='weekly'){ return addDays(iso, (5 - d.getDay() + 7) % 7); }
+  return d.getDate()===1 ? iso : toISO(new Date(d.getFullYear(), d.getMonth()+1, 1));
+}
+function dueOnOrBefore(iso, freq){
+  const d = parseISO(iso);
+  if(freq==='weekly'){ return addDays(iso, -((d.getDay() - 5 + 7) % 7)); }
+  return toISO(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+function advanceDue(iso, freq){ return freq==='weekly' ? addDays(iso,7) : addMonths(iso,1); }
 function formatDate(iso){
   return parseISO(iso).toLocaleDateString('de-AT', {day:'2-digit',month:'2-digit',year:'numeric'});
 }
@@ -314,15 +370,34 @@ function formatMoney(n){
   return new Intl.NumberFormat('de-AT', {style:'currency', currency:'EUR'}).format(n);
 }
 function uid(){ return Math.random().toString(36).slice(2,10); }
+function round2(n){ return Math.round(n*100)/100; }
 
 // ---------- state ----------
+// Ältere Daten kannten kein "settled"-Flag: Bonus/Malus-Einträge, die vor der
+// letzten Auszahlung liegen, gelten als abgerechnet, alle späteren als offen.
+function migrate(s){
+  (s.kids||[]).forEach(kid=>{
+    // vorhandene Fälligkeit auf Freitag bzw. Monatsersten ausrichten
+    if(kid.nextDue){
+      kid.nextDue = kid.nextDue > todayISO() ? dueOnOrAfter(kid.nextDue, kid.frequency)
+                                             : dueOnOrBefore(kid.nextDue, kid.frequency);
+    }
+    let lastPayoutIdx = -1;
+    kid.entries.forEach((e,i)=>{ if(e.type==='payout') lastPayoutIdx = i; });
+    kid.entries.forEach((e,i)=>{
+      if(e.type!=='payout' && e.settled===undefined) e.settled = i < lastPayoutIdx;
+    });
+  });
+  return s;
+}
+
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return structuredClone(DEFAULT_STATE);
     const parsed = JSON.parse(raw);
     if(!parsed.kids || !parsed.kids.length) return structuredClone(DEFAULT_STATE);
-    return parsed;
+    return migrate(parsed);
   }catch(e){
     console.error('Konnte gespeicherte Daten nicht lesen, starte mit Standardwerten.', e);
     return structuredClone(DEFAULT_STATE);
@@ -402,7 +477,7 @@ async function pullFromCloud(silent){
     const remote = await res.json();
     if(remote && remote.kids && (remote.updatedAt||0) > (state.updatedAt||0)){
       applyingRemote = true;
-      state = remote;
+      state = migrate(remote);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       applyingRemote = false;
       render();
@@ -446,7 +521,7 @@ function wireSyncUI(){
         const remote = await res.json();
         if(remote && remote.kids){
           applyingRemote = true;
-          state = remote;
+          state = migrate(remote);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           applyingRemote = false;
           render();
@@ -462,12 +537,39 @@ function wireSyncUI(){
 }
 
 function getKid(id){ return state.kids.find(k=>k.id===id); }
-function balanceOf(kid){
-  return kid.entries.reduce((sum,e)=>{
-    if(e.type==='malus') return sum - e.amount;
-    return sum + e.amount;
-  },0);
+
+// Offene (noch nicht ausbezahlte) Boni/Mali der laufenden Periode
+function openAdjustments(kid){
+  return kid.entries.filter(e=>e.type!=='payout' && !e.settled);
 }
+function openBonus(kid){
+  return round2(openAdjustments(kid).filter(e=>e.type==='bonus').reduce((s,e)=>s+e.amount,0));
+}
+function openMalus(kid){
+  return round2(openAdjustments(kid).filter(e=>e.type==='malus').reduce((s,e)=>s+e.amount,0));
+}
+// Kontostand = anstehende Auszahlung: Basis + offene Boni − offene Mali
+function balanceOf(kid){
+  return round2(kid.base + openBonus(kid) - openMalus(kid));
+}
+
+// ---------- toast ----------
+let toastTimer = null;
+let toastUndoFn = null;
+function showToast(text, undoFn){
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = text;
+  toastUndoFn = undoFn;
+  document.getElementById('toastUndo').style.display = undoFn ? '' : 'none';
+  t.style.display = 'flex';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.style.display='none'; toastUndoFn=null; }, 4000);
+}
+document.getElementById('toastUndo').addEventListener('click', ()=>{
+  if(toastUndoFn) toastUndoFn();
+  toastUndoFn = null;
+  document.getElementById('toast').style.display = 'none';
+});
 
 // ---------- render: tabs ----------
 function renderTabs(){
@@ -488,16 +590,29 @@ function renderPanel(){
   const kid = getKid(state.activeKid);
   const panel = document.getElementById('panel');
   const bal = balanceOf(kid);
+  const bon = openBonus(kid);
+  const mal = openMalus(kid);
   const isDue = kid.nextDue <= todayISO();
-  const defaultAdjust = Math.round(kid.base * 0.10 * 100) / 100;
+
+  const tapRow = (type)=> TAP_AMOUNTS.map(a=>
+    `<button type="button" class="tap ${type}" data-type="${type}" data-amt="${a.v}">${type==='malus' ? '−' : '+'}${a.l}</button>`
+  ).join('');
 
   panel.style.setProperty('--kid-color', kid.color);
   panel.innerHTML = `
     <div class="kid-head">
       <h2 class="kid-name">${kid.name}</h2>
-      <div class="balance">
-        <div class="label">Kontostand</div>
+      <div class="balance ${isDue ? 'is-due':''}" id="dueCard">
+        <div class="label">${isDue ? 'Jetzt fällig' : 'Anstehende Auszahlung'} · ${formatDate(kid.nextDue)}</div>
         <div class="val">${formatMoney(bal)}</div>
+        <div class="breakdown">
+          Basis ${formatMoney(kid.base)}
+          · <span class="b">Boni +${formatMoney(bon)}</span>
+          · <span class="m">Mali −${formatMoney(mal)}</span>
+        </div>
+        <div id="dueAction" style="margin-top:10px;">
+          <button class="btn-gold" id="btnPayout">Ausgezahlt ✓</button>
+        </div>
       </div>
     </div>
 
@@ -534,41 +649,27 @@ function renderPanel(){
       </div>
     </div>
 
-    <div class="due-card ${isDue ? 'is-due':''}" id="dueCard">
-      <div class="info">
-        <div class="eyebrow">${isDue ? 'Jetzt fällig' : 'Nächste Fälligkeit'}</div>
-        <div class="amt">${formatMoney(kid.base)}</div>
-        <div class="date">fällig am ${formatDate(kid.nextDue)}</div>
-      </div>
-      <div id="dueAction">
-        <button class="btn-gold" id="btnPayout">Ausgezahlt ✓</button>
-      </div>
-    </div>
-
     <div class="box" style="margin-bottom:20px;">
       <p class="eyebrow">Bonus / Malus</p>
-      <h3>Neuen Eintrag hinzufügen</h3>
-      <div class="segmented" id="typeSeg">
-        <button data-type="bonus" class="sel" type="button">Bonus</button>
-        <button data-type="malus" type="button">Malus</button>
+      <h3>Schnell buchen</h3>
+      <div class="adj-comment">
+        <label for="adjComment">Begründung (optional) – wird beim nächsten Tippen mit eingetragen</label>
+        <input type="text" id="adjComment" placeholder="z. B. Zimmer nicht aufgeräumt" autocomplete="off">
       </div>
-      <div class="row" style="margin-top:12px;">
-        <div>
-          <label>Betrag (€)</label>
-          <input type="number" step="0.5" min="0" id="adjAmount" value="${defaultAdjust}">
-        </div>
-        <div style="flex:2;min-width:200px;">
-          <label>Kommentar</label>
-          <input type="text" id="adjComment" placeholder="z. B. Zimmer nicht aufgeräumt">
-        </div>
-        <button class="btn-primary" id="btnAddAdj">Eintragen</button>
+      <div class="adj-block">
+        <div class="adj-label bonus">Bonus</div>
+        <div class="tap-row">${tapRow('bonus')}</div>
+      </div>
+      <div class="adj-block">
+        <div class="adj-label malus">Malus</div>
+        <div class="tap-row">${tapRow('malus')}</div>
       </div>
     </div>
 
     ${renderHistoryBox(kid)}
   `;
 
-  wirePanelEvents(kid, defaultAdjust);
+  wirePanelEvents(kid);
 }
 
 // runtime-only view state (not persisted — only ledger data is saved)
@@ -635,11 +736,11 @@ function renderCalendar(kid){
       <h4>${formatDate(sel)}</h4>
       ${selEntries.length ? selEntries.map(e=>{
         const label = e.type==='payout' ? 'Auszahlung' : e.type==='bonus' ? 'Bonus' : 'Malus';
-        const sign = e.type==='malus' ? '−' : '+';
-        const cls = e.type==='malus' ? 'neg' : 'pos';
+        const sign = e.type==='malus' ? '−' : e.type==='bonus' ? '+' : '';
+        const cls = e.type==='malus' ? 'neg' : e.type==='bonus' ? 'pos' : 'neutral';
         return `<div style="display:flex;gap:10px;align-items:center;padding:5px 0;font-size:13.5px;">
           <span class="type-tag ${e.type}">${label}</span>
-          <span class="amount-cell ${cls}">${sign} ${formatMoney(e.amount)}</span>
+          <span class="amount-cell ${cls}">${sign}${sign?' ':''}${formatMoney(e.amount)}</span>
           <span class="comment-cell">${e.comment ? escapeHTML(e.comment) : '—'}</span>
         </div>`;
       }).join('') : `<div class="empty-hist">An diesem Tag keine Einträge.</div>`}
@@ -672,12 +773,13 @@ function renderHistoryTable(kid){
   const sorted = [...kid.entries].sort((a,b)=> b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   const rows = sorted.map(e=>{
     const label = e.type==='payout' ? 'Auszahlung' : e.type==='bonus' ? 'Bonus' : 'Malus';
-    const sign = e.type==='malus' ? '−' : '+';
-    const cls = e.type==='malus' ? 'neg' : 'pos';
+    const sign = e.type==='malus' ? '−' : e.type==='bonus' ? '+' : '';
+    const cls = e.type==='malus' ? 'neg' : e.type==='bonus' ? 'pos' : 'neutral';
+    const open = (e.type!=='payout' && !e.settled) ? `<span class="open-flag">offen</span>` : '';
     return `<tr>
       <td>${formatDate(e.date)}</td>
-      <td><span class="type-tag ${e.type}">${label}</span></td>
-      <td class="amount-cell ${cls}">${sign} ${formatMoney(e.amount)}</td>
+      <td><span class="type-tag ${e.type}">${label}</span>${open}</td>
+      <td class="amount-cell ${cls}">${sign}${sign?' ':''}${formatMoney(e.amount)}</td>
       <td class="comment-cell">${e.comment ? escapeHTML(e.comment) : '—'}</td>
       <td><button class="btn-danger-ghost" data-del="${e.id}" title="Eintrag löschen">✕</button></td>
     </tr>`;
@@ -695,7 +797,7 @@ function escapeHTML(s){
 }
 
 // ---------- events ----------
-function wirePanelEvents(kid, defaultAdjust){
+function wirePanelEvents(kid){
   // base amount edit
   document.getElementById('editBase').addEventListener('click', ()=>{
     document.getElementById('baseDisplay').style.display='none';
@@ -705,7 +807,7 @@ function wirePanelEvents(kid, defaultAdjust){
   document.getElementById('saveBase').addEventListener('click', ()=>{
     const val = parseFloat(document.getElementById('baseInput').value);
     if(!isNaN(val) && val>=0){
-      kid.base = Math.round(val*100)/100;
+      kid.base = round2(val);
       saveState();
     }
     renderPanel();
@@ -716,7 +818,7 @@ function wirePanelEvents(kid, defaultAdjust){
   const freqSwitch = document.getElementById('freqSwitch');
   const toggleFreq = ()=>{
     kid.frequency = kid.frequency==='weekly' ? 'monthly' : 'weekly';
-    kid.nextDue = addPeriod(todayISO(), kid.frequency);
+    kid.nextDue = dueOnOrAfter(todayISO(), kid.frequency);
     saveState();
     renderPanel();
   };
@@ -726,11 +828,12 @@ function wirePanelEvents(kid, defaultAdjust){
   // payout confirm
   document.getElementById('btnPayout').addEventListener('click', ()=>{
     const action = document.getElementById('dueAction');
+    const suggested = Math.max(0, balanceOf(kid));
     action.innerHTML = `
       <div class="confirm-row">
         <div>
           <label>Betrag (€)</label>
-          <input type="number" step="0.5" min="0" id="payoutAmount" value="${kid.base}">
+          <input type="number" step="0.05" min="0" id="payoutAmount" value="${suggested}">
         </div>
         <div>
           <label>Datum</label>
@@ -744,8 +847,19 @@ function wirePanelEvents(kid, defaultAdjust){
       const amt = parseFloat(document.getElementById('payoutAmount').value);
       const date = document.getElementById('payoutDate').value || todayISO();
       if(isNaN(amt) || amt<0) return;
-      kid.entries.push({ id:uid(), type:'payout', amount:Math.round(amt*100)/100, date, comment:'' });
-      kid.nextDue = addPeriod(kid.nextDue, kid.frequency);
+
+      // Offene Boni/Mali dieser Periode werden mit der Auszahlung abgerechnet
+      const open = openAdjustments(kid);
+      const bon = openBonus(kid), mal = openMalus(kid);
+      let comment = '';
+      if(open.length){
+        comment = `Basis ${formatMoney(kid.base)}`
+          + (bon ? ` + Boni ${formatMoney(bon)}` : '')
+          + (mal ? ` − Mali ${formatMoney(mal)}` : '');
+      }
+      open.forEach(e=>{ e.settled = true; });
+      kid.entries.push({ id:uid(), type:'payout', amount:round2(amt), date, comment, settles: open.map(e=>e.id) });
+      kid.nextDue = advanceDue(kid.nextDue, kid.frequency);
       saveState();
       playStamp();
       renderPanel();
@@ -753,27 +867,24 @@ function wirePanelEvents(kid, defaultAdjust){
     });
   });
 
-  // bonus/malus type toggle
-  let selectedType = 'bonus';
-  const segBtns = document.querySelectorAll('#typeSeg button');
-  segBtns.forEach(b=>{
-    b.addEventListener('click', ()=>{
-      selectedType = b.dataset.type;
-      segBtns.forEach(x=>x.classList.remove('sel'));
-      b.classList.add('sel');
-      document.getElementById('adjAmount').value = defaultAdjust;
+  // Bonus / Malus per Tap
+  document.querySelectorAll('.tap').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const type = btn.dataset.type;
+      const amt = parseFloat(btn.dataset.amt);
+      const comment = document.getElementById('adjComment').value.trim();
+      const entry = { id:uid(), type, amount:round2(amt), date: todayISO(), comment, settled:false };
+      kid.entries.push(entry);
+      saveState();
+      renderPanel();
+      renderTabs();
+      showToast(`${type==='bonus' ? '+' : '−'}${formatMoney(entry.amount)} ${type==='bonus' ? 'Bonus' : 'Malus'} für ${kid.name}`, ()=>{
+        kid.entries = kid.entries.filter(e=>e.id!==entry.id);
+        saveState();
+        renderPanel();
+        renderTabs();
+      });
     });
-  });
-
-  // add bonus/malus
-  document.getElementById('btnAddAdj').addEventListener('click', ()=>{
-    const amt = parseFloat(document.getElementById('adjAmount').value);
-    const comment = document.getElementById('adjComment').value.trim();
-    if(isNaN(amt) || amt<0) return;
-    kid.entries.push({ id:uid(), type:selectedType, amount:Math.round(amt*100)/100, date: todayISO(), comment });
-    saveState();
-    renderPanel();
-    renderTabs();
   });
 
   // history view toggle (table / calendar)
@@ -819,6 +930,11 @@ function wirePanelEvents(kid, defaultAdjust){
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.del;
       if(confirm('Diesen Eintrag wirklich löschen?')){
+        const entry = kid.entries.find(e=>e.id===id);
+        // Wird eine Auszahlung gelöscht, werden die damit abgerechneten Boni/Mali wieder offen
+        if(entry && entry.type==='payout' && Array.isArray(entry.settles)){
+          kid.entries.forEach(e=>{ if(entry.settles.includes(e.id)) e.settled = false; });
+        }
         kid.entries = kid.entries.filter(e=>e.id!==id);
         saveState();
         renderPanel();
@@ -864,7 +980,7 @@ document.getElementById('fileImport').addEventListener('change', (e)=>{
     try{
       const parsed = JSON.parse(reader.result);
       if(!parsed.kids) throw new Error('Ungültiges Format');
-      state = parsed;
+      state = migrate(parsed);
       saveState();
       render();
       alert('Daten erfolgreich geladen.');
